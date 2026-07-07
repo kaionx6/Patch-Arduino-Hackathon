@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LoopyBot Mood Sender</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 32px;
+      max-width: 520px;
+      background: #f6f7f9;
+      color: #111827;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin: 0 0 16px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 1px solid #c7ccd5;
+      background: #ffffff;
+      color: #111827;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      grid-column: 1 / -1;
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #ffffff;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    #status {
+      min-height: 24px;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #374151;
+    }
+  </style>
+</head>
+<body>
+  <h1>LoopyBot Mood Sender</h1>
+  <button class="primary" id="connect">Connect to LoopyBot</button>
+  <div class="controls">
+    <button data-mood="happy" disabled>happy</button>
+    <button data-mood="sad" disabled>sad</button>
+    <button data-mood="angry" disabled>angry</button>
+    <button data-mood="moody" disabled>moody</button>
+    <button data-mood="joyful" disabled>joyful</button>
+  </div>
+  <div id="status">Not connected.</div>
+
+  <script>
+    const serviceUuid = '0100646f-6f6d-2d74-6f62-2d79706f6f6c';
+    const characteristicUuid = '0200646f-6f6d-2d74-6f62-2d79706f6f6c';
+    const encoder = new TextEncoder();
+    const connectButton = document.querySelector('#connect');
+    const moodButtons = document.querySelectorAll('[data-mood]');
+    const status = document.querySelector('#status');
+    let moodCharacteristic = null;
+
+    function setConnected(connected) {
+      moodButtons.forEach((button) => {
+        button.disabled = !connected;
+      });
+    }
+
+    connectButton.addEventListener('click', async () => {
+      try {
+        status.textContent = 'Choosing Bluetooth device...';
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'LoopyBot' }],
+          optionalServices: [serviceUuid],
+        });
+
+        device.addEventListener('gattserverdisconnected', () => {
+          moodCharacteristic = null;
+          setConnected(false);
+          status.textContent = 'Disconnected.';
+        });
+
+        status.textContent = 'Connecting...';
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(serviceUuid);
+        moodCharacteristic = await service.getCharacteristic(characteristicUuid);
+        setConnected(true);
+        status.textContent = 'Connected. Choose a mood.';
+      } catch (error) {
+        status.textContent = `Connection failed: ${error.message}`;
+      }
+    });
+
+    moodButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!moodCharacteristic) {
+          return;
+        }
+
+        const mood = button.dataset.mood;
+        await moodCharacteristic.writeValue(encoder.encode(mood));
+        status.textContent = `Sent mood: ${mood}`;
+      });
+    });
+  </script>
+</body>
+</html>
